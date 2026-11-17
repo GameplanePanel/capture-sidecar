@@ -1,5 +1,7 @@
 # capture-sidecar — Specification
 
+> This repository is checked out as the `capture-sidecar/` submodule of [GameplanePanel/Gameplane](https://github.com/GameplanePanel/Gameplane). Paths such as `docs/`, `operator/`, `api/`, `charts/` and `web/` below refer to that repository.
+
 **Status:** pre-v1 (v0.4.1), Phase 2 Foundational (implementation complete)  
 **Module / command:** `github.com/GameplanePanel/gameplane/capture-sidecar`  
 **Dependencies (current):** stdlib + external libraries for packet capture and filtering (github.com/gopacket/gopacket v1.7.2, github.com/packetcap/go-pcap, golang.org/x/net)
@@ -130,7 +132,7 @@ The module declares the following external dependencies in `go.mod`:
 - `github.com/packetcap/go-pcap v0.0.0-20260731105150-c86974bbfbcd` — BPF filter compilation and validation
 - `golang.org/x/net` — Networking utilities (bundled by gopacket)
 
-This module does not depend on `svcutil`: its control server is served over mTLS via `ListenAndServeTLS` with client-certificate verification, and `RunHTTP` only serves plain HTTP (`ListenAndServe`) — a plaintext listener would remove the sidecar's only authentication boundary (see the comment at `cmd/main.go:80-86`).
+The control server is served over mTLS via `ListenAndServeTLS` with client-certificate verification and never over plain HTTP: a plaintext listener would remove the sidecar's only authentication boundary (see the comment above `server.ListenAndServeTLS` in `cmd/main.go`).
 
 ## External Interface / Configuration (Phase 2 Design)
 
@@ -316,11 +318,10 @@ Both items previously listed here as "planned" are implemented; kept as a sectio
 
 ### Test Commands (Phase 2)
 
-Run via the workspace root Makefile or isolated:
+Run from this repository's root (CI runs the same through Gameplane's shared `go-component.yaml` workflow):
 
 ```sh
-make test-go           # Runs all Go tests, including capture-sidecar
-cd capture-sidecar && go test ./...    # Isolated run
+go test -race ./...
 ```
 
 ### Key Test Cases (Phase 2)

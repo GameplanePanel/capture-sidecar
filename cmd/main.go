@@ -153,9 +153,9 @@ func main() {
 	// and TLS 1.2 minimum, from auth.ServerTLS). This is the sidecar's only
 	// authentication boundary: on a plaintext listener anything that can reach
 	// the pod network could start captures and download another server's
-	// packet data, so svcutil.RunHTTP - which is HTTP-only - must not be used
-	// here. Empty file arguments make ListenAndServeTLS use the certificates
-	// already in server.TLSConfig, matching agent/cmd/main.go.
+	// packet data, so a plain-HTTP server must not be used here. Empty file
+	// arguments make ListenAndServeTLS use the certificates already in
+	// server.TLSConfig, matching Gameplane's agent/cmd/main.go.
 	errCh := make(chan error, 1)
 	go func() {
 		if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
