@@ -143,7 +143,10 @@ func NewWriter(filePath string, maxDurationSeconds int64, maxSizeBytes int64, sn
 	// containment check, and a cleaned path also can't carry a redundant
 	// ".." that would otherwise resolve outside whatever directory the
 	// caller intended.
-	file, err := os.Create(filepath.Clean(filePath))
+	// The file is created owner-only (0600) while the capture runs; callers
+	// widen the mode after finalizing if needed. O_NOFOLLOW means a symlink
+	// planted at the path is never followed.
+	file, err := os.OpenFile(filepath.Clean(filePath), os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("create capture file %s: %w", filePath, err)
 	}

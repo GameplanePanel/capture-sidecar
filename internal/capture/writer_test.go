@@ -14,6 +14,56 @@ import (
 
 const testFilter = "udp port 25565"
 
+// TestNewWriterCreatesOwnerOnlyFile checks that the capture file is created
+// with mode 0600 while the capture runs.
+func TestNewWriterCreatesOwnerOnlyFile(t *testing.T) {
+	path := t.TempDir() + "/owner_only.pcapng"
+
+	w, err := NewWriter(path, 300, 1000000, 65535, testFilter)
+	if err != nil {
+		t.Fatalf("NewWriter failed: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat capture file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("capture file perm = %o; want 600", perm)
+	}
+}
+
+// TestNewWriterRefusesSymlink checks that a symlink planted at the capture path
+// is never followed: NewWriter must fail and must not write through it.
+func TestNewWriterRefusesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	victim := dir + "/victim.txt"
+	if err := os.WriteFile(victim, []byte("keep"), 0o600); err != nil {
+		t.Fatalf("write victim: %v", err)
+	}
+	link := dir + "/planted.pcapng"
+	if err := os.Symlink(victim, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	w, err := NewWriter(link, 300, 1000000, 65535, testFilter)
+	if err == nil {
+		_ = w.Close()
+		t.Fatal("NewWriter followed a planted symlink; want error")
+	}
+
+	got, readErr := os.ReadFile(victim)
+	if readErr != nil {
+		t.Fatalf("read victim: %v", readErr)
+	}
+	if string(got) != "keep" {
+		t.Errorf("symlink target was modified: %q", got)
+	}
+}
+
 // TestWriter_NormalStop tests that a normal stop produces a valid file
 // openable via gopacket's own reader, and that counters are accurate.
 func TestWriter_NormalStop(t *testing.T) {

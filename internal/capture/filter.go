@@ -30,30 +30,40 @@ type Filter struct {
 // game traffic and control-plane traffic included. Rejecting these keywords
 // outright is the only honest behaviour available to us; go-pcap gives no
 // signal we could surface instead.
+//
+// The same applies to the non-protocol qualifiers go-pcap ignores: portrange
+// compiles to an unconditional keep (so "tcp port 1 or portrange 1-65535"
+// captured everything), less and greater are silently treated as a port test,
+// and broadcast and multicast are ignored entirely.
 var unsupportedProtocolKeywords = map[string]struct{}{
-	"aarp":    {},
-	"ah":      {},
-	"atalk":   {},
-	"decnet":  {},
-	"decnett": {},
-	"esp":     {},
-	"fddi":    {},
-	"icmp":    {},
-	"icmp6":   {},
-	"igmp":    {},
-	"igrp":    {},
-	"ipx":     {},
-	"iso":     {},
-	"lat":     {},
-	"modpl":   {},
-	"morpc":   {},
-	"netbeui": {},
-	"pim":     {},
-	"sca":     {},
-	"stp":     {},
-	"tr":      {},
-	"vrrp":    {},
-	"wlan":    {},
+	"aarp":      {},
+	"ah":        {},
+	"atalk":     {},
+	"broadcast": {},
+	"decnet":    {},
+	"decnett":   {},
+	"esp":       {},
+	"fddi":      {},
+	"greater":   {},
+	"icmp":      {},
+	"icmp6":     {},
+	"igmp":      {},
+	"igrp":      {},
+	"ipx":       {},
+	"iso":       {},
+	"lat":       {},
+	"less":      {},
+	"modpl":     {},
+	"morpc":     {},
+	"multicast": {},
+	"netbeui":   {},
+	"pim":       {},
+	"portrange": {},
+	"sca":       {},
+	"stp":       {},
+	"tr":        {},
+	"vrrp":      {},
+	"wlan":      {},
 }
 
 // CompileFilter validates and compiles a BPF filter expression.
@@ -92,6 +102,9 @@ func CompileFilter(expr string) (*Filter, error) {
 	if !testsPacketContents(instructions) {
 		return nil, fmt.Errorf("invalid filter: %q compiled to a program with no packet test, so it would not restrict the capture at all", expr)
 	}
+	if !canDrop(instructions) {
+		return nil, fmt.Errorf("invalid filter: %q compiled to a program that keeps every packet, so it would not restrict the capture at all", expr)
+	}
 
 	return &Filter{
 		instructions: instructions,
@@ -129,6 +142,48 @@ func testsPacketContents(prog []bpf.Instruction) bool {
 		case bpf.JumpIf, bpf.JumpIfX:
 			return true
 		}
+	}
+	return false
+}
+
+// canDrop reports whether some packet can reach a drop verdict: a RetConstant
+// returning 0 that is reachable from instruction 0 along some execution path.
+// A RetA is treated as able to drop, since its value depends on the packet.
+// The walk is a structural backstop for any future qualifier go-pcap ignores
+// inside an "or", where the program can keep every packet even though it
+// contains conditional branches (see testsPacketContents).
+func canDrop(prog []bpf.Instruction) bool {
+	if len(prog) == 0 {
+		return false
+	}
+	visited := make([]bool, len(prog))
+	stack := []int{0}
+	for len(stack) > 0 {
+		i := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if i < 0 || i >= len(prog) || visited[i] {
+			continue
+		}
+		visited[i] = true
+
+		var next []int
+		switch ins := prog[i].(type) {
+		case bpf.JumpIf:
+			next = []int{i + 1 + int(ins.SkipTrue), i + 1 + int(ins.SkipFalse)}
+		case bpf.JumpIfX:
+			next = []int{i + 1 + int(ins.SkipTrue), i + 1 + int(ins.SkipFalse)}
+		case bpf.Jump:
+			next = []int{i + 1 + int(ins.Skip)}
+		case bpf.RetConstant:
+			if ins.Val == 0 {
+				return true
+			}
+		case bpf.RetA:
+			return true
+		default:
+			next = []int{i + 1}
+		}
+		stack = append(stack, next...)
 	}
 	return false
 }
