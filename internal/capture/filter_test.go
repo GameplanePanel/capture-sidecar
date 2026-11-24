@@ -147,3 +147,40 @@ func TestCompileFilter_CompiledProgramDiscriminates(t *testing.T) {
 		t.Error("compiled program has no conditional branch; it would match every packet")
 	}
 }
+
+// TestCompileFilterRejectsIgnoredQualifiers pins the qualifiers go-pcap parses
+// but does not implement: portrange compiles to an unconditional keep, less and
+// greater are silently read as port tests, and broadcast is ignored. Each must
+// be refused rather than captured as if it had filtered.
+func TestCompileFilterRejectsIgnoredQualifiers(t *testing.T) {
+	tests := []string{
+		"tcp port 25565 or portrange 1-65535",
+		"portrange 1-2",
+		"tcp port 1 or less 100",
+		"tcp port 1 or greater 1",
+		"tcp port 1 or ip broadcast",
+	}
+	for _, expr := range tests {
+		t.Run(expr, func(t *testing.T) {
+			f, err := CompileFilter(expr)
+			if err == nil {
+				t.Fatalf("CompileFilter(%q) succeeded; want a rejection", expr)
+			}
+			if f != nil {
+				t.Error("CompileFilter returned non-nil Filter after error")
+			}
+		})
+	}
+}
+
+// TestCanDropFindsReachableDrop checks that a normal port filter has a reachable
+// drop verdict, so the program-level backstop in CompileFilter accepts it.
+func TestCanDropFindsReachableDrop(t *testing.T) {
+	f, err := CompileFilter("tcp port 25565")
+	if err != nil {
+		t.Fatalf("CompileFilter(\"tcp port 25565\") failed: %v", err)
+	}
+	if !canDrop(f.Instructions()) {
+		t.Error("canDrop reported no reachable drop for a restricting filter")
+	}
+}

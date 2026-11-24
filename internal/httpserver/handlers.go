@@ -313,6 +313,11 @@ func validCaptureID(id string) bool {
 	return captureIDPattern.MatchString(id)
 }
 
+// maxControlBody bounds the JSON body of a start or stop control request.
+// Control requests are small JSON, so anything larger is refused rather than
+// decoded.
+const maxControlBody = 64 << 10
+
 // captureFilePath returns the on-disk path for a capture's PCAPNG file.
 //
 // Every caller of this method has already rejected id with validCaptureID
@@ -427,6 +432,7 @@ func (s *Server) HandleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxControlBody)
 	var req startRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -729,6 +735,9 @@ func (s *Server) HandleStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxControlBody)
+	}
 	var req stopRequest
 	// The body is optional. A client that builds the request without an
 	// explicit ContentLength sends it chunked (ContentLength == -1), so test
@@ -857,6 +866,14 @@ func (s *Server) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if !validCaptureID(id) {
 		http.Error(w, "capture id required", http.StatusBadRequest)
+		return
+	}
+	// A caller that sends identity headers gets the same identity check as the
+	// bound route. This mirrors HandleDelete.
+	if hasControlIdentity(r) {
+		r.SetPathValue("serverUID", r.Header.Get("X-Gameplane-Server-UID"))
+		r.SetPathValue("captureUID", r.Header.Get("X-Gameplane-Capture-UID"))
+		s.HandleBoundDownload(w, r)
 		return
 	}
 
