@@ -8,7 +8,7 @@ This repository holds the optional AF_PACKET/BPF network capture sidecar and nod
 - **CI** is `.github/workflows/ci.yaml`, a thin caller of Gameplane's shared [`go-component.yaml`](https://github.com/GameplanePanel/Gameplane/blob/master/.github/workflows/go-component.yaml), pinned by SHA: lint with Gameplane's root `.golangci.yml` and `.hadolint.yaml` (no copy here), race tests on amd64 and arm64 with the `.testcoverage.yml` gate, govulncheck, and an image build. Dependabot runs in this repository.
 - **Images** `capture-sidecar` (`Dockerfile`, built by `make image-capture-sidecar`) are built and published from the Gameplane repository root: the Dockerfiles copy `capture-sidecar/...` from that build context.
 - **Callers live in Gameplane:** paths such as `operator/`, `api/`, `charts/`, `docs/` and `web/` in `specs.md` and code comments refer to that repository.
-- **Shipping a change:** PR to `main` here → after it merges, bump the `capture-sidecar` pointer in Gameplane (`git -C capture-sidecar checkout <merged sha on main>`, `git add capture-sidecar`) in a Gameplane PR. A user-visible change gets its `changelog/unreleased/` entry in that Gameplane PR.
+- **Shipping a change:** PR to `master` here → after it merges, bump the `capture-sidecar` pointer in Gameplane (`git -C capture-sidecar checkout <merged sha on master>`, `git add capture-sidecar`) in a Gameplane PR. A user-visible change gets its `changelog/unreleased/` entry in that Gameplane PR.
 
 ## Rules
 
