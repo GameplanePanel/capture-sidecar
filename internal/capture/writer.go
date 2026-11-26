@@ -62,7 +62,6 @@ const (
 	LimitReasonDurationReached = "max_duration_reached"
 	LimitReasonSizeReached     = "max_size_reached"
 	LimitReasonDiskFull        = "disk_full"
-	LimitReasonUserRequested   = "user_requested"
 )
 
 // ErrLimitReached is returned by WritePacket as soon as a hard limit is hit —

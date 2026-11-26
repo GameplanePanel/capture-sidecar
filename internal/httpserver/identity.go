@@ -3,7 +3,6 @@ package httpserver
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -185,10 +184,7 @@ func (s *Server) HandleBoundDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "capture file unavailable", http.StatusInternalServerError)
 		return
 	}
-	name := fmt.Sprintf("capture-%s.pcapng", id)
-	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
-	http.ServeContent(w, r, name, stat.ModTime(), file)
+	servePCAP(w, r, id, stat.ModTime(), file)
 }
 
 // HandleBoundDelete never removes a file whose persisted identities differ.
