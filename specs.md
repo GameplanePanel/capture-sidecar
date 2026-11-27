@@ -2,7 +2,7 @@
 
 > This repository is checked out as the `capture-sidecar/` submodule of [GameplanePanel/Gameplane](https://github.com/GameplanePanel/Gameplane). Paths such as `docs/`, `operator/`, `api/`, `charts/` and `web/` below refer to that repository.
 
-**Status:** pre-v1 (v0.4.1), Phase 2 Foundational (implementation complete)  
+**Status:** pre-v1 (v0.5.0), Phase 2 Foundational (implementation complete)  
 **Module / command:** `github.com/GameplanePanel/gameplane/capture-sidecar`  
 **Dependencies (current):** stdlib + external libraries for packet capture and filtering (github.com/gopacket/gopacket v1.7.2, github.com/packetcap/go-pcap, golang.org/x/net)
 
@@ -144,7 +144,7 @@ The control server is served over mTLS via `ListenAndServeTLS` with client-certi
 
 All three paths are mounted from the pre-existing `agent-tls` Secret that every game pod carries (no new Secret is created for capture).
 
-- **`CAPTURE_VOLUME_BUDGET_BYTES`** (optional): Maximum total bytes of retained capture files plus a new capture's own `maxSizeBytes` that `HandleStart` will admit (F-187). Set by the operator's `buildCaptureEphemeralContainer` (`operator/internal/controller/gameserver_controller.go`), derived from the `captures` emptyDir's own `SizeLimit` with a 10% safety margin (`captureVolumeBudgetBytes`), so it can never drift from the volume the kubelet actually enforces. Unset or unparsable falls back to the same 1Gi-minus-10%-margin default hardcoded in `cmd/main.go` (matches `charts/gameplane/values.yaml`'s documented 1 GiB volume limit). `cmd/main.go` also exposes this as the `--capture-volume-budget-bytes` flag for standalone runs; `0` disables the check.
+- **`CAPTURE_VOLUME_BUDGET_BYTES`** (optional): Maximum total bytes of retained capture files plus a new capture's own `maxSizeBytes` that `HandleStart` will admit (F-187). Set by the operator's `buildCaptureEphemeralContainer` (`operator/internal/controller/gameserver_controller.go`), derived from the `captures` emptyDir's own `SizeLimit` with a 10% safety margin (`captureVolumeBudgetBytes`), so it can never drift from the volume the kubelet actually enforces. Unset or unparsable falls back to the same 1Gi-minus-10%-margin default hardcoded in `cmd/main.go` (matches `charts/gameplane/values.yaml`'s documented 1 GiB volume limit). `0` disables the check.
 
 ### HTTP Server Configuration
 
@@ -175,7 +175,7 @@ All three paths are mounted from the pre-existing `agent-tls` Secret that every 
 
 **Path**: `/tmp/captures/capture-<captureId>.pcapng`
 
-**Format**: PCAPNG (Pcap Next Generation), will be produced by `github.com/google/gopacket/pcapgo.NgWriter`.
+**Format**: PCAPNG (Pcap Next Generation), produced by `github.com/gopacket/gopacket/pcapgo.NgWriter`.
 
 **Snaplen**: Full capture (65535 bytes per packet; no truncation).
 
@@ -343,4 +343,4 @@ go test -race ./...
 - **`api/internal/handlers/capture.go`** — API-tier start/stop/download/enable/disable handlers that call the sidecar.
 - **`gopacket` documentation** — AF_PACKET and PCAPNG format specs.
 - **BPF filter syntax** — `man 7 pcap-filter` for the filter expression grammar.
-- **PCAPNG format spec** — RFC 7468 (note: PCAPNG is not an RFC; the canonical spec is in the libpcap/tcpdump source).
+- **PCAPNG format spec** — PCAPNG is not an RFC; the canonical spec is in the libpcap/tcpdump source.

@@ -436,7 +436,7 @@ func TestHandleStart_LimitsOutOfRange(t *testing.T) {
 	}{
 		{"zero duration", 0, 1000000},
 		{"negative duration", -1, 1000000},
-		{"duration beyond the sidecar cap", maxDurationSecondsLimit + 1, 1000000},
+		{"duration beyond the sidecar cap", capture.MaxCaptureDurationSeconds + 1, 1000000},
 		{"duration that overflows int64 nanoseconds", 1 << 62, 1000000},
 		{"zero size", 300, 0},
 		{"negative size", 300, -1},
@@ -1261,10 +1261,6 @@ func (fw *failingWriter) BytesWritten() int64 {
 
 func (fw *failingWriter) PacketsWritten() int64 {
 	return fw.inner.PacketsWritten()
-}
-
-func (fw *failingWriter) IsLimitReached() bool {
-	return fw.inner.IsLimitReached()
 }
 
 func (fw *failingWriter) LimitReason() string {
