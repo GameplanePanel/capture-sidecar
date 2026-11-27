@@ -339,7 +339,7 @@ func TestWriter_SizeLimitCountsFileOverhead(t *testing.T) {
 	if written == 0 {
 		t.Fatal("no packets were written before the size limit")
 	}
-	if !w.IsLimitReached() {
+	if w.LimitReason() == "" {
 		t.Fatal("size limit was not reached")
 	}
 	if w.LimitReason() != LimitReasonSizeReached {
@@ -423,7 +423,7 @@ func TestWriter_DurationLimitStop(t *testing.T) {
 		t.Fatalf("WritePacket after the duration limit = %v; want ErrLimitReached", err)
 	}
 
-	if !w.IsLimitReached() {
+	if w.LimitReason() == "" {
 		t.Fatal("duration limit was not reached")
 	}
 
@@ -693,7 +693,7 @@ func TestWriter_ENOSPCDuringFlushReportsDiskFull(t *testing.T) {
 			t.Fatalf("WritePacket %d before any flush reached the full disk: %v", i, err)
 		}
 	}
-	if w.IsLimitReached() {
+	if w.LimitReason() != "" {
 		t.Fatal("limit reached before any flush reached the simulated full disk")
 	}
 
@@ -704,7 +704,7 @@ func TestWriter_ENOSPCDuringFlushReportsDiskFull(t *testing.T) {
 	if !errors.Is(err, syscall.ENOSPC) {
 		t.Fatalf("Close() error = %v; want it to wrap syscall.ENOSPC", err)
 	}
-	if !w.IsLimitReached() {
+	if w.LimitReason() == "" {
 		t.Fatal("a disk-full flush failure must mark the limit reached")
 	}
 	if w.LimitReason() != LimitReasonDiskFull {

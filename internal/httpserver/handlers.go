@@ -30,14 +30,6 @@ const (
 	// documents it under this name (see capture.NewWriter).
 	captureInterface = "eth0"
 
-	// maxDurationSecondsLimit is the sidecar's own outer bound on a capture's
-	// runtime. The API tier caps requests far lower, but the sidecar is a
-	// separate trust boundary and must not accept a value that overflows
-	// int64 nanoseconds when multiplied by time.Second: that yields a negative
-	// duration, and time.AfterFunc fires a negative duration immediately, so
-	// an absurdly large request would silently produce a zero-length capture.
-	maxDurationSecondsLimit = 7 * 24 * 60 * 60
-
 	// stopDrainTimeout bounds how long HandleStop waits for the packet-reading
 	// goroutine to exit. WriteTimeout is deliberately unset on this server so
 	// multi-GiB downloads can stream, which means an unbounded wait here would
@@ -439,7 +431,7 @@ func (s *Server) HandleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.MaxDurationSeconds <= 0 || req.MaxDurationSeconds > maxDurationSecondsLimit {
+	if req.MaxDurationSeconds <= 0 || req.MaxDurationSeconds > capture.MaxCaptureDurationSeconds {
 		http.Error(w, "maxDurationSeconds out of range", http.StatusBadRequest)
 		return
 	}

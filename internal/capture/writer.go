@@ -29,8 +29,6 @@ type PacketWriter interface {
 	BytesWritten() int64
 	// PacketsWritten returns the cumulative number of packets written.
 	PacketsWritten() int64
-	// IsLimitReached returns true if a hard limit has been reached.
-	IsLimitReached() bool
 	// LimitReason returns the reason why capture stopped (if a limit was reached).
 	LimitReason() string
 }
@@ -106,7 +104,6 @@ type Writer struct {
 	closed         bool
 	bytesWritten   int64
 	packetsWritten int64
-	limitReached   bool
 	limitReason    string
 }
 
@@ -209,14 +206,13 @@ func (w *Writer) WritePacket(pkt *RawPacket) error {
 	}
 
 	// Check if a limit has already been reached.
-	if w.limitReached {
+	if w.limitReason != "" {
 		return fmt.Errorf("capture stopped: %s: %w", w.limitReason, ErrLimitReached)
 	}
 
 	// Check duration limit (hard stop at or past the limit).
 	elapsed := time.Since(w.startTime).Seconds()
 	if elapsed >= float64(w.maxDurationSeconds) {
-		w.limitReached = true
 		w.limitReason = LimitReasonDurationReached
 		return fmt.Errorf("capture stopped: %s: %w", w.limitReason, ErrLimitReached)
 	}
@@ -246,7 +242,6 @@ func (w *Writer) WritePacket(pkt *RawPacket) error {
 	if err := w.writer.WritePacket(ci, packetData); err != nil {
 		// Check if this is a disk-full error (ENOSPC).
 		if isENOSPC(err) {
-			w.limitReached = true
 			w.limitReason = LimitReasonDiskFull
 			return fmt.Errorf("disk full during capture: %w", err)
 		}
@@ -265,7 +260,6 @@ func (w *Writer) WritePacket(pkt *RawPacket) error {
 	// written; returning ErrLimitReached stops the capture immediately rather
 	// than waiting for a subsequent packet that may never arrive.
 	if w.bytesWritten >= w.maxSizeBytes {
-		w.limitReached = true
 		w.limitReason = LimitReasonSizeReached
 		return fmt.Errorf("capture stopped: %s: %w", w.limitReason, ErrLimitReached)
 	}
@@ -295,7 +289,6 @@ func (w *Writer) Close() error {
 	// so closing the writer produces a complete, valid file.
 	if err := w.writer.Flush(); err != nil {
 		if isENOSPC(err) {
-			w.limitReached = true
 			w.limitReason = LimitReasonDiskFull
 		}
 		_ = w.file.Close()
@@ -326,13 +319,6 @@ func (w *Writer) PacketsWritten() int64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.packetsWritten
-}
-
-// IsLimitReached returns true if a hard limit has been reached.
-func (w *Writer) IsLimitReached() bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.limitReached
 }
 
 // LimitReason returns the reason why capture stopped (if a limit was reached).
