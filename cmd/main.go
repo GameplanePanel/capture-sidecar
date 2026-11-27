@@ -35,6 +35,13 @@ var Version = "dev"
 // download may legitimately still be streaming when the pod is torn down.
 const shutdownTimeout = 30 * time.Second
 
+// listenAddr and captureDataDir match the port and the captures volume
+// mount in the operator's Pod specs.
+const (
+	listenAddr     = "0.0.0.0:9091"
+	captureDataDir = "/tmp/captures"
+)
+
 // defaultVolumeBudgetBytes is the fallback used when CAPTURE_VOLUME_BUDGET_BYTES
 // is unset or unparsable (e.g. run standalone outside the operator). It
 // matches captureVolumeBudgetBytes in
@@ -43,10 +50,9 @@ const shutdownTimeout = 30 * time.Second
 const defaultVolumeBudgetBytes int64 = 1*1024*1024*1024 - (1*1024*1024*1024)/10
 
 // envOrDefault returns the named environment variable's value, or fallback
-// if it is unset or empty. Used for the flag defaults below so an operator-
-// set env var actually takes effect (F-188), while an explicit CLI flag
-// still wins over both, and running with no env vars at all (standalone,
-// tests) keeps the same hardcoded fallback as before.
+// if it is unset or empty, so an operator-set env var takes effect (F-188)
+// and running with no env vars at all (standalone, tests) keeps the
+// hardcoded fallback.
 func envOrDefault(name, fallback string) string {
 	if v := os.Getenv(name); v != "" {
 		return v
@@ -58,18 +64,12 @@ func main() {
 	// TLS_CERT_FILE/TLS_KEY_FILE/TLS_CA_FILE are the env vars specs.md
 	// documents as required, and the ones buildCaptureEphemeralContainer
 	// (operator/internal/controller/gameserver_controller.go) actually sets
-	// on the ephemeral container. They only take effect as flag defaults
-	// here (mirroring the CAPTURE_VOLUME_BUDGET_BYTES pattern below): the
-	// operator never passes -tls-cert/-tls-key/-tls-client-ca args, so
-	// before this the env vars had no effect at all and the sidecar worked
-	// only because the flag defaults happened to equal the env values
-	// (F-188). An explicit flag still overrides the env value, same as any
-	// other flag/default relationship.
-	listenAddr := flag.String("listen", "0.0.0.0:9091", "HTTP listen address")
-	certFile := flag.String("tls-cert", envOrDefault("TLS_CERT_FILE", "/etc/tls/tls.crt"), "Server certificate file")
-	keyFile := flag.String("tls-key", envOrDefault("TLS_KEY_FILE", "/etc/tls/tls.key"), "Server key file")
-	caFile := flag.String("tls-client-ca", envOrDefault("TLS_CA_FILE", "/etc/tls/ca.crt"), "Client CA certificate file")
-	captureDataDir := flag.String("capture-dir", "/tmp/captures", "Directory for capture files")
+	// on the ephemeral container (F-188). The listen address and capture
+	// directory are fixed: the operator's Pod specs mount /tmp/captures and
+	// expose port 9091.
+	certFile := envOrDefault("TLS_CERT_FILE", "/etc/tls/tls.crt")
+	keyFile := envOrDefault("TLS_KEY_FILE", "/etc/tls/tls.key")
+	caFile := envOrDefault("TLS_CA_FILE", "/etc/tls/ca.crt")
 	nodeWorker := flag.Bool("node-worker", false, "Run one operator-bound node diagnostic capture and exit")
 	artifactOnly := flag.Bool("artifacts-only", false, "Serve completed node capture artifacts without capture controls")
 
@@ -77,18 +77,16 @@ func main() {
 	// container (see buildCaptureEphemeralContainer in
 	// operator/internal/controller/gameserver_controller.go), derived from
 	// the "captures" emptyDir's own SizeLimit so the two can't drift apart
-	// (F-187). A flag default keeps this runnable standalone and in tests.
-	volumeBudgetDefault := defaultVolumeBudgetBytes
+	// (F-187). Unset or invalid falls back to defaultVolumeBudgetBytes.
+	volumeBudgetBytes := defaultVolumeBudgetBytes
 	if v := os.Getenv("CAPTURE_VOLUME_BUDGET_BYTES"); v != "" {
 		parsed, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || parsed <= 0 {
 			slog.Error("invalid CAPTURE_VOLUME_BUDGET_BYTES, using default", "value", v, "default", defaultVolumeBudgetBytes)
 		} else {
-			volumeBudgetDefault = parsed
+			volumeBudgetBytes = parsed
 		}
 	}
-	volumeBudgetBytes := flag.Int64("capture-volume-budget-bytes", volumeBudgetDefault,
-		"Maximum total bytes of retained capture files plus a new capture's own maxSizeBytes before HandleStart refuses to start; 0 disables the check")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -99,7 +97,7 @@ func main() {
 			slog.Error("invalid node capture configuration")
 			os.Exit(1)
 		}
-		if err := nodecapture.Run(ctx, cfg, *captureDataDir); err != nil {
+		if err := nodecapture.Run(ctx, cfg, captureDataDir); err != nil {
 			slog.Error("node capture failed", "err", err)
 			os.Exit(1)
 		}
@@ -109,11 +107,11 @@ func main() {
 	// Create capture server. ctx (cancelled on SIGTERM/SIGINT) is the parent
 	// for every capture goroutine, so shutdown cancels in-flight captures
 	// instead of leaking them past server exit.
-	captureServer := httpserver.NewServer(ctx, *captureDataDir, *volumeBudgetBytes, os.Getenv("GAMEPLANE_SERVER_UID"))
+	captureServer := httpserver.NewServer(ctx, captureDataDir, volumeBudgetBytes, os.Getenv("GAMEPLANE_SERVER_UID"))
 
 	// Set up mTLS. The certificates come from the same per-GameServer
 	// `agent-tls` Secret the agent uses, mounted at /etc/tls.
-	tlsConfig, err := auth.ServerTLS(*certFile, *keyFile, *caFile)
+	tlsConfig, err := auth.ServerTLS(certFile, keyFile, caFile)
 	if err != nil {
 		slog.Error("failed to setup TLS", "err", err)
 		os.Exit(1)
@@ -132,7 +130,7 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:      *listenAddr,
+		Addr:      listenAddr,
 		Handler:   mux,
 		TLSConfig: tlsConfig,
 		// ReadHeaderTimeout guards against slow-header connections holding the

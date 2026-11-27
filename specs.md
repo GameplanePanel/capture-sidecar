@@ -144,7 +144,7 @@ The control server is served over mTLS via `ListenAndServeTLS` with client-certi
 
 All three paths are mounted from the pre-existing `agent-tls` Secret that every game pod carries (no new Secret is created for capture).
 
-- **`CAPTURE_VOLUME_BUDGET_BYTES`** (optional): Maximum total bytes of retained capture files plus a new capture's own `maxSizeBytes` that `HandleStart` will admit (F-187). Set by the operator's `buildCaptureEphemeralContainer` (`operator/internal/controller/gameserver_controller.go`), derived from the `captures` emptyDir's own `SizeLimit` with a 10% safety margin (`captureVolumeBudgetBytes`), so it can never drift from the volume the kubelet actually enforces. Unset or unparsable falls back to the same 1Gi-minus-10%-margin default hardcoded in `cmd/main.go` (matches `charts/gameplane/values.yaml`'s documented 1 GiB volume limit). `cmd/main.go` also exposes this as the `--capture-volume-budget-bytes` flag for standalone runs; `0` disables the check.
+- **`CAPTURE_VOLUME_BUDGET_BYTES`** (optional): Maximum total bytes of retained capture files plus a new capture's own `maxSizeBytes` that `HandleStart` will admit (F-187). Set by the operator's `buildCaptureEphemeralContainer` (`operator/internal/controller/gameserver_controller.go`), derived from the `captures` emptyDir's own `SizeLimit` with a 10% safety margin (`captureVolumeBudgetBytes`), so it can never drift from the volume the kubelet actually enforces. Unset or unparsable falls back to the same 1Gi-minus-10%-margin default hardcoded in `cmd/main.go` (matches `charts/gameplane/values.yaml`'s documented 1 GiB volume limit). `0` disables the check.
 
 ### HTTP Server Configuration
 
